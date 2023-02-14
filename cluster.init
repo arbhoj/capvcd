@@ -1,0 +1,53 @@
+export CLUSTER_NAME=vulture
+export VCD_SITE="https://" # SET vCD URL
+export VCD_ORGANIZATION=d2iq
+export VCD_ORGANIZATION_VDC="Oscorp-Workload"
+export CAPVCD_API_VERSION=capvcd.vmware.com/v1.1
+export export VCD_USER=api_vcd_abhoj 
+
+export VCD_REFRESH_TOKEN_B64="" # Set token converted to Base64
+export IS_MANAGEMENT_CLUSTER=false
+export CONTROL_PLANE_VIP_INTERFACE=ens160
+export CONTROL_PLANE_VIP_IP=10.39.0.32
+export K8S_SERVICE_LB_RANGE=10.39.0.33-10.39.0.40
+export VCD_ORGANIZATION_VDC_NETWORK="Oscorp-Workload-Network"
+export VCD_TEMPLATE_NAME="dkp-2.4.0-airgapped-ubuntu-k8s-v1.24.6"
+
+export SSH_PUBLIC_KEY=$(cat /home/builder/dkp/demo/ssh.pub)
+
+export VCD_RDE_ID=NO_RDE_${VCD_ORGANIZATION_VDC}-${CLUSTER_NAME} # Auto set by the generate_rde_and_set_vars.sh script
+export VCD_RDE_ID_B64=$(echo $VCD_RDE_ID | { base64 -w0 2>/dev/null || base64; })
+
+export TARGET_NAMESPACE=default
+
+export VCD_CATALOG="dkp"
+
+export VAPP=${CLUSTER_NAME}
+
+export KUBERNETES_VERSION=v1.24.6 # Ensure this matches with the version of the VCD_TEMPLATE_NAME
+export POD_CIDR="99.96.0.0/11"
+export SERVICE_CIDR="99.64.0.0/13"
+
+export NODE_CIDR_BLOCK_NUMBER=26
+
+export CONTROL_PLANE_MACHINE_COUNT=3
+export VCD_CONTROL_PLANE_SIZING_POLICY="dkp_control_standard"
+export VCD_CONTROL_PLANE_STORAGE_PROFILE="vSAN Default Storage Policy"
+
+export WORKER_MACHINE_COUNT=4
+export WORKER_POOL_NAME="worker-pool-1"
+export VCD_WORKER_SIZING_POLICY="dkp_worker_standard"
+export VCD_WORKER_STORAGE_PROFILE="vSAN Default Storage Policy"
+
+export VCD_PV_STORAGE_PROFILE="vSAN Default Storage Policy"
+
+export USE_ONE_ARM=true # Not used in our implementation
+export VCD_VIP_CIDR="10.30.0.32/27"
+
+export DNS_VERSION=""
+export ETCD_VERSION=""
+export HTTPS_PROXY=""
+export HTTP_PROXY=""
+export NO_PROXY=""
+export VCD_CONTROL_PLANE_PLACEMENT_POLICY=""
+export VCD_WORKER_PLACEMENT_POLICY=""
