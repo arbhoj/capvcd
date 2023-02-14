@@ -11,7 +11,8 @@ Pre-reqs:
 > Note: 
 >- The name of the vApp Template should be postfixed with the kubernetes version that it supports. e.g.: `dkp-2.4.0-ubuntu-k8s-v1.24.6`   
 >- Use a base OS image and DKP [konvoy image builder(kib)](https://github.com/mesosphere/konvoy-image-builder) to build this image in vSphere and then create a vApp in the associated vCD using this image.
-
+- vCD Org, VDC, EdgeGateway, Network and IP Range preconfigured to be consumed by the kubernetes cluster.
+- vCD Api user with admin permissions to deploy the vAPP, configure Network and provision Persistent Volumes using Named Disks. 
 ## Part 1: Setting up Cluster API (CAPI) enabled Management Kubernetes Cluster 
 
 Deploy a CAPI bootstrap Management cluster
