@@ -1,0 +1,66 @@
+# This file needs to be copied to ~/cluster-api/ for clusterctl init and generate commands to work.
+# Replace the providers.url to your local repo
+#
+# Below are the sample commands
+# clusterctl init --infrastructure vcd
+# clusterctl generate cluster demo -i vcd:v1.0.0
+# clusterctl generate cluster demo -i vcd:v1.0.0 -f v1.20.8
+
+LatestRelease:
+  URL: https://github.com/kubernetes-sigs/cluster-api/releases/tag/v1.0.2
+  Version: v1.0.2
+cert-manager:
+  url: "https://github.com/cert-manager/cert-manager/releases/latest/cert-manager.yaml"
+providers:
+# provider name must correspond with provider url, as clusterctl follows semantic "path/infrastructure-${name}/v1.0.0/infrastructure-components.yaml"
+# example url for name "vcdInfra" would be: /basepath/infrastructure-vcdInfra/v1.0.0/infrastructure-components.yaml"
+# if "v1.0.0" or "infrastructure-" prefix is omitted, there will be an error thrown expecting path format: {basepath}/{provider-name or provider-label}/{version}/{components.yaml}
+# after the following path has been created, paste all cluster-templates inside the path specified provider url
+# a fully functional folder will look similar to below:
+# {basepath}/infrastructure-vcd/v1.0.0/infrastructure-components.yaml, clusterctl-template.yaml, clusterctl-template-v1.20.8.yaml
+  - name: "vcd"
+    url: "/Users/arvindbhoj/infrastructure-vcd/v1.0.0/infrastructure-components.yaml"
+    type: "InfrastructureProvider"
+
+
+EXP_CLUSTER_RESOURCE_SET: true
+
+# Mandatory VCD specific properties
+#VCD_SITE: "https://VCD_FQDN"
+#VCD_ORGANIZATION: "test_org"
+#VCD_ORGANIZATION_VDC: "test_ovdc"
+#VCD_ORGANIZATION_VDC_NETWORK: "test_ovdc_nw"
+#VCD_CATALOG: "test_catalog"
+#VCD_TEMPLATE_NAME: "Ubuntu 20.04 and Kubernetes v1.21.8+vmware.1"
+#VCD_USERNAME_B64: "" # It is okay to leave username and password empty if VCD_REFRESH_TOKEN_B64 is specified
+#VCD_PASSWORD_B64: "" # It is okay to leave username and password empty if VCD_REFRESH_TOKEN_B64 is specified
+#VCD_REFRESH_TOKEN_B64: "" # API token of the VCD tenant user; it is okay to leave this empty if VCD_USERNAME_B64 and VCD_PASSWORD_B64 are specified
+
+# Optional VCD specific properties
+#VCD_CONTROL_PLANE_SIZING_POLICY: "large_4core16gb"
+#VCD_CONTROL_PLANE_STORAGE_PROFILE: "*"
+#VCD_CONTROL_PLANE_PLACEMENT_POLICY: ""
+#VCD_WORKER_SIZING_POLICY: "medium_2core8gb"
+#VCD_WORKER_PLACEMENT_POLICY: ""
+#VCD_WORKER_STORAGE_PROFILE:  "*"
+#DISK_SIZE: 20Gi
+#VCD_RDE_ID: "urn:vcloud:entity:vmware:capvcdCluster:UUID"
+#VCD_VIP_CIDR: ""
+
+# Kubernetes cluster properties
+#CLUSTER_NAME: "myCluster"
+#TARGET_NAMESPACE: default
+#CONTROL_PLANE_MACHINE_COUNT: 1
+#WORKER_MACHINE_COUNT: 1
+#KUBERNETES_VERSION: v1.20.8+vmware.1 # Ensure this matches with the version of the VCD_TEMPLATE_NAME
+#ETCD_VERSION: v3.4.13_vmware.14 # Ignore this property if you are using one of the existing flavors
+#DNS_VERSION: v1.7.0_vmware.12 # Ignore this property if you are using one of the existing flavors
+#POD_CIDR: "100.96.0.0/11"
+#SERVICE_CIDR: "100.64.0.0/13"
+#TKR_VERSION: v1.20.8---vmware.1-tkg.2 # Ignore this property if you are using one of the existing flavors
+#TKG_VERSION: v1.4.2 # Ignore this property if you are using one of the existing flavors
+#HTTP_PROXY:  "http://USERNAME:PASSWORD@SERVER:PORT"
+#HTTPS_PROXY:  "https://USERNAME:PASSWORD@SERVER:PORT"
+#NO_PROXY:  ""
+#SSH_PUBLIC_KEY: ""
+#WORKER_POOL_NAME: "worker-pool-1"

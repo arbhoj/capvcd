@@ -1,0 +1,795 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${TARGET_NAMESPACE}
+  labels:
+    cni: antrea
+    ccm: external
+    csi: external
+    konvoy.d2iq.io/cluster-name: ${CLUSTER_NAME}
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - ${POD_CIDR} # pod CIDR for the cluster
+    serviceDomain: cluster.local
+    services:
+      cidrBlocks:
+        - ${SERVICE_CIDR} # service CIDR for the cluster
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: ${CLUSTER_NAME}-control-plane # name of the KubeadmControlPlane object associated with the cluster.
+    namespace: ${TARGET_NAMESPACE} # kubernetes namespace in which the KubeadmControlPlane object reside. Should be the same namespace as that of the Cluster object
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: VCDCluster
+    name: ${CLUSTER_NAME} # name of the VCDCluster object associated with the cluster.
+    namespace: ${TARGET_NAMESPACE} # kubernetes namespace in which the VCDCluster object resides. Should be the same namespace as that of the Cluster object
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: capi-user-credentials-${CLUSTER_NAME}
+  namespace: ${TARGET_NAMESPACE}
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+    clusterctl.cluster.x-k8s.io/move: ""
+type: Opaque
+data:
+  refreshToken: ${VCD_REFRESH_TOKEN_B64} # refresh token of the client registered with VCD for creating clusters. username and password can be left blank if refresh token is provided
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: VCDCluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${TARGET_NAMESPACE}
+spec:
+  site: ${VCD_SITE} # VCD endpoint with the format https://VCD_HOST. No trailing '/'
+  org: ${VCD_ORGANIZATION} # VCD organization name where the cluster should be deployed
+  ovdc: ${VCD_ORGANIZATION_VDC} # VCD virtual datacenter name where the cluster should be deployed
+  ovdcNetwork: ${VCD_ORGANIZATION_VDC_NETWORK} # VCD virtual datacenter network to be used by the cluster
+  useAsManagementCluster: ${IS_MANAGEMENT_CLUSTER} # intent to use the resultant CAPVCD cluster as a management cluster
+  userContext:
+    secretRef:
+      name: capi-user-credentials-${CLUSTER_NAME} # name of the secret containing the credentials of the VCD persona creating the cluster
+      namespace: ${TARGET_NAMESPACE} # name of the secret containing the credentials of the VCD persona creating the cluster
+  rdeId: ${VCD_RDE_ID} # rdeId if it is already created. If empty, CAPVCD will create one for the cluster.
+  controlPlaneEndpoint:
+    host: ${CONTROL_PLANE_VIP_IP}
+    port: 6443
+  #loadBalancerConfigSpec:
+   # useOneArm: ${USE_ONE_ARM}
+   # vipSubnet: ${VCD_VIP_CIDR} # Virtual IP CIDR for the external network
+  proxyConfigSpec:
+    httpProxy: ${HTTP_PROXY}
+    httpsProxy: ${HTTPS_PROXY}
+    noProxy: ${NO_PROXY}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: VCDMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+  namespace: ${TARGET_NAMESPACE}
+spec:
+  template:
+    spec:
+      catalog: ${VCD_CATALOG} # Catalog hosting the TKGm template, which will be used to deploy the control plane VMs
+      template: ${VCD_TEMPLATE_NAME} # Name of the template to be used to create (or) upgrade the control plane nodes
+      sizingPolicy: ${VCD_CONTROL_PLANE_SIZING_POLICY} # Sizing policy to be used for the control plane VMs (this must be pre-published on the chosen organization virtual datacenter)
+      placementPolicy: ${VCD_CONTROL_PLANE_PLACEMENT_POLICY} # Placement policy to be used for worker VMs (this must be pre-published on the chosen organization virtual datacenter)
+      storageProfile: "${VCD_CONTROL_PLANE_STORAGE_PROFILE}" # Storage profile to be used for the control plane VMs (this must be pre-published on the chosen organization virtual datacenter)
+      enableNvidiaGPU: false
+---
+apiVersion: v1
+data:
+  value: a2luZDogRW5jcnlwdGlvbkNvbmZpZwphcGlWZXJzaW9uOiB2MQpyZXNvdXJjZXM6CiAgLSByZXNvdXJjZXM6CiAgICAgIC0gc2VjcmV0cwogICAgICAtIGNvbmZpZ21hcHMKICAgIHByb3ZpZGVyczoKICAgICAgLSBhZXNjYmM6CiAgICAgICAgICBrZXlzOgogICAgICAgICAgICAtIG5hbWU6IGtleQogICAgICAgICAgICAgIHNlY3JldDogYW5BU2pDYk9JMFcxT3NJbHdpS1FKWHRHT2JQR0dkWHprMGpGYkNSRjNKbz0KICAgICAgLSBpZGVudGl0eToge30=
+kind: Secret
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+    clusterctl.cluster.x-k8s.io/move: ""
+  name: ${CLUSTER_NAME}-etcd-encryption-config
+  namespace: default
+type: Opaque
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+  namespace: ${TARGET_NAMESPACE}
+spec:
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          audit-log-maxage: "30"
+          audit-log-maxbackup: "10"
+          audit-log-maxsize: "100"
+          audit-log-path: /var/log/audit/kube-apiserver-audit.log
+          audit-policy-file: /etc/kubernetes/audit-policy/apiserver-audit-policy.yaml
+          encryption-provider-config: /etc/kubernetes/pki/encryption-config.yaml
+        extraVolumes:
+        - hostPath: /etc/kubernetes/audit-policy/
+          mountPath: /etc/kubernetes/audit-policy/
+          name: audit-policy
+        - hostPath: /var/log/kubernetes/audit
+          mountPath: /var/log/audit/
+          name: audit-logs
+      controllerManager:
+        extraArgs:
+          enable-hostpath-provisioner: "true"
+      dns: {}
+      etcd:
+        local:
+          imageTag: 3.4.13-0
+    initConfiguration:
+      nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
+        kubeletExtraArgs:
+          cloud-provider: external
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+    joinConfiguration:
+      nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
+        kubeletExtraArgs:
+          cloud-provider: external
+          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+    preKubeadmCommands:
+    - /run/kubeadm/konvoy-set-kube-proxy-configuration.sh
+    - /run/konvoy/containerd-apply-patches.sh
+    - systemctl daemon-reload
+    - /run/konvoy/restart-containerd-and-wait.sh
+    users:
+    - name: konvoy
+      sshAuthorizedKeys:
+      - ${SSH_PUBLIC_KEY}
+      sudo: ALL=(ALL) NOPASSWD:ALL
+    files:
+    - content: |
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          creationTimestamp: null
+          name: kube-vip
+          namespace: kube-system
+        spec:
+          containers:
+          - args:
+            - manager
+            env:
+            - name: vip_arp
+              value: "true"
+            - name: port
+              value: "6443"
+            - name: vip_interface
+              value: ${CONTROL_PLANE_VIP_INTERFACE}
+            - name: vip_cidr
+              value: "32"
+            - name: cp_enable
+              value: "true"
+            - name: cp_namespace
+              value: kube-system
+            - name: vip_ddns
+              value: "false"
+            - name: svc_enable
+              value: "true"
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_leaseduration
+              value: "5"
+            - name: vip_renewdeadline
+              value: "3"
+            - name: vip_retryperiod
+              value: "1"
+            - name: address
+              value: ${CONTROL_PLANE_VIP_IP}
+            - name: prometheus_server
+              value: :2112
+            image: ghcr.io/kube-vip/kube-vip:v0.5.0
+            imagePullPolicy: Always
+            name: kube-vip
+            resources: {}
+            securityContext:
+              capabilities:
+                add:
+                - NET_ADMIN
+                - NET_RAW
+            volumeMounts:
+            - mountPath: /etc/kubernetes/admin.conf
+              name: kubeconfig
+          hostAliases:
+          - hostnames:
+            - kubernetes
+            ip: 127.0.0.1
+          hostNetwork: true
+          volumes:
+          - hostPath:
+              path: /etc/kubernetes/admin.conf
+            name: kubeconfig
+      owner: root:root
+      path: /etc/kubernetes/manifests/kube-vip.yaml
+      permissions: "0600"
+    - content: |
+        # Taken from https://github.com/kubernetes/kubernetes/blob/master/cluster/gce/gci/configure-helper.sh
+        # Recommended in Kubernetes docs
+        apiVersion: audit.k8s.io/v1
+        kind: Policy
+        rules:
+          # The following requests were manually identified as high-volume and low-risk,
+          # so drop them.
+          - level: None
+            users: ["system:kube-proxy"]
+            verbs: ["watch"]
+            resources:
+              - group: "" # core
+                resources: ["endpoints", "services", "services/status"]
+          - level: None
+            # Ingress controller reads 'configmaps/ingress-uid' through the unsecured port.
+            # TODO(#46983): Change this to the ingress controller service account.
+            users: ["system:unsecured"]
+            namespaces: ["kube-system"]
+            verbs: ["get"]
+            resources:
+              - group: "" # core
+                resources: ["configmaps"]
+          - level: None
+            users: ["kubelet"] # legacy kubelet identity
+            verbs: ["get"]
+            resources:
+              - group: "" # core
+                resources: ["nodes", "nodes/status"]
+          - level: None
+            userGroups: ["system:nodes"]
+            verbs: ["get"]
+            resources:
+              - group: "" # core
+                resources: ["nodes", "nodes/status"]
+          - level: None
+            users:
+              - system:kube-controller-manager
+              - system:kube-scheduler
+              - system:serviceaccount:kube-system:endpoint-controller
+            verbs: ["get", "update"]
+            namespaces: ["kube-system"]
+            resources:
+              - group: "" # core
+                resources: ["endpoints"]
+          - level: None
+            users: ["system:apiserver"]
+            verbs: ["get"]
+            resources:
+              - group: "" # core
+                resources: ["namespaces", "namespaces/status", "namespaces/finalize"]
+          - level: None
+            users: ["cluster-autoscaler"]
+            verbs: ["get", "update"]
+            namespaces: ["kube-system"]
+            resources:
+              - group: "" # core
+                resources: ["configmaps", "endpoints"]
+          # Don't log HPA fetching metrics.
+          - level: None
+            users:
+              - system:kube-controller-manager
+            verbs: ["get", "list"]
+            resources:
+              - group: "metrics.k8s.io"
+          # Don't log these read-only URLs.
+          - level: None
+            nonResourceURLs:
+              - /healthz*
+              - /version
+              - /swagger*
+          # Don't log events requests.
+          - level: None
+            resources:
+              - group: "" # core
+                resources: ["events"]
+          # node and pod status calls from nodes are high-volume and can be large, don't log responses for expected updates from nodes
+          - level: Request
+            users: ["kubelet", "system:node-problem-detector", "system:serviceaccount:kube-system:node-problem-detector"]
+            verbs: ["update","patch"]
+            resources:
+              - group: "" # core
+                resources: ["nodes/status", "pods/status"]
+            omitStages:
+              - "RequestReceived"
+          - level: Request
+            userGroups: ["system:nodes"]
+            verbs: ["update","patch"]
+            resources:
+              - group: "" # core
+                resources: ["nodes/status", "pods/status"]
+            omitStages:
+              - "RequestReceived"
+          # deletecollection calls can be large, don't log responses for expected namespace deletions
+          - level: Request
+            users: ["system:serviceaccount:kube-system:namespace-controller"]
+            verbs: ["deletecollection"]
+            omitStages:
+              - "RequestReceived"
+          # Secrets, ConfigMaps, and TokenReviews can contain sensitive & binary data,
+          # so only log at the Metadata level.
+          - level: Metadata
+            resources:
+              - group: "" # core
+                resources: ["secrets", "configmaps"]
+              - group: authentication.k8s.io
+                resources: ["tokenreviews"]
+            omitStages:
+              - "RequestReceived"
+          # Get responses can be large; skip them.
+          - level: Request
+            verbs: ["get", "list", "watch"]
+            resources:
+              - group: "" # core
+              - group: "admissionregistration.k8s.io"
+              - group: "apiextensions.k8s.io"
+              - group: "apiregistration.k8s.io"
+              - group: "apps"
+              - group: "authentication.k8s.io"
+              - group: "authorization.k8s.io"
+              - group: "autoscaling"
+              - group: "batch"
+              - group: "certificates.k8s.io"
+              - group: "extensions"
+              - group: "metrics.k8s.io"
+              - group: "networking.k8s.io"
+              - group: "node.k8s.io"
+              - group: "policy"
+              - group: "rbac.authorization.k8s.io"
+              - group: "scheduling.k8s.io"
+              - group: "settings.k8s.io"
+              - group: "storage.k8s.io"
+            omitStages:
+              - "RequestReceived"
+          # Default level for known APIs
+          - level: RequestResponse
+            resources:
+              - group: "" # core
+              - group: "admissionregistration.k8s.io"
+              - group: "apiextensions.k8s.io"
+              - group: "apiregistration.k8s.io"
+              - group: "apps"
+              - group: "authentication.k8s.io"
+              - group: "authorization.k8s.io"
+              - group: "autoscaling"
+              - group: "batch"
+              - group: "certificates.k8s.io"
+              - group: "extensions"
+              - group: "metrics.k8s.io"
+              - group: "networking.k8s.io"
+              - group: "node.k8s.io"
+              - group: "policy"
+              - group: "rbac.authorization.k8s.io"
+              - group: "scheduling.k8s.io"
+              - group: "settings.k8s.io"
+              - group: "storage.k8s.io"
+            omitStages:
+              - "RequestReceived"
+          # Default level for all other requests.
+          - level: Metadata
+            omitStages:
+              - "RequestReceived"
+      path: /etc/kubernetes/audit-policy/apiserver-audit-policy.yaml
+      permissions: "0600"
+    - content: |
+        #!/bin/bash
+        # CAPI does not expose an API to modify KubeProxyConfiguration
+        # this is a workaround to use a script with preKubeadmCommand to modify the kubeadm config files
+        # https://github.com/kubernetes-sigs/cluster-api/issues/4512
+        for i in $(ls /run/kubeadm/ | grep 'kubeadm.yaml\|kubeadm-join-config.yaml'); do
+          cat <<EOF>> "/run/kubeadm//$i"
+        ---
+        kind: KubeProxyConfiguration
+        apiVersion: kubeproxy.config.k8s.io/v1alpha1
+        metricsBindAddress: "0.0.0.0:10249"
+        EOF
+        done
+      path: /run/kubeadm/konvoy-set-kube-proxy-configuration.sh
+      permissions: "0700"
+    - content: |
+        [metrics]
+          address = "0.0.0.0:1338"
+          grpc_histogram = false
+      path: /etc/containerd/konvoy-conf.d/konvoy-metrics.toml
+      permissions: "0644"
+    - content: |
+        #!/bin/bash
+        set -euo pipefail
+        IFS=$'\n\t'
+
+        if ! ctr --namespace k8s.io images check "name==docker.io/mesosphere/toml-merge:v0.1.0" | grep "docker.io/mesosphere/toml-merge:v0.1.0" >/dev/null; then
+          ctr --namespace k8s.io images pull "docker.io/mesosphere/toml-merge:v0.1.0"
+        fi
+
+        cleanup() {
+          ctr images unmount "$tmp_ctr_mount_dir" || true
+        }
+
+        trap 'cleanup' EXIT
+
+        readonly tmp_ctr_mount_dir="$(mktemp -d)"
+
+        ctr --namespace k8s.io images mount docker.io/mesosphere/toml-merge:v0.1.0 "$tmp_ctr_mount_dir"
+        "$tmp_ctr_mount_dir/usr/local/bin/toml-merge" -i --patch-file "/etc/containerd/konvoy-conf.d/*.toml" /etc/containerd/config.toml
+      path: /run/konvoy/containerd-apply-patches.sh
+      permissions: "0700"
+    - content: |
+        #!/bin/bash
+        systemctl restart containerd
+
+        SECONDS=0
+        until crictl info; do
+          if ((SECONDS > 60)); then
+            echo "Containerd is not running. Giving up..."
+            exit 1
+          fi
+          echo "Containerd is not running yet. Waiting..."
+          sleep 5
+        done
+      path: /run/konvoy/restart-containerd-and-wait.sh
+      permissions: "0700"
+    - contentFrom:
+        secret:
+          key: value
+          name: ${CLUSTER_NAME}-etcd-encryption-config
+      owner: root:root
+      path: /etc/kubernetes/pki/encryption-config.yaml
+      permissions: "0640"
+    format: cloud-config
+
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: VCDMachineTemplate
+      name: ${CLUSTER_NAME}-control-plane # name of the VCDMachineTemplate object used to deploy control plane VMs. Should be the same name as that of KubeadmControlPlane object
+      namespace: ${TARGET_NAMESPACE} # kubernetes namespace of the VCDMachineTemplate object. Should be the same namespace as that of the Cluster object
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT} # desired number of control plane nodes for the cluster
+  version: ${KUBERNETES_VERSION} # Kubernetes version to be used to create (or) upgrade the control plane nodes. The value needs to be retrieved from the respective TKGm ova BOM. Refer to the documentation.
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: VCDMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-${WORKER_POOL_NAME}
+  namespace: ${TARGET_NAMESPACE}
+spec:
+  template:
+    spec:
+      catalog: ${VCD_CATALOG} # Catalog hosting the TKGm template, which will be used to deploy the worker VMs
+      template: ${VCD_TEMPLATE_NAME} # Name of the template to be used to create (or) upgrade the worker nodes
+      sizingPolicy: ${VCD_WORKER_SIZING_POLICY} # Sizing policy to be used for the control plane VMs (this must be pre-published on the chosen organization virtual datacenter)
+      placementPolicy: ${VCD_WORKER_PLACEMENT_POLICY} # Placement policy to be used for worker VMs (this must be pre-published on the chosen organization virtual datacenter)
+      storageProfile: "${VCD_WORKER_STORAGE_PROFILE}" # Storage profile to be used for the control plane VMs (this must be pre-published on the chosen organization virtual datacenter)
+      enableNvidiaGPU: false
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: ${CLUSTER_NAME}-${WORKER_POOL_NAME}
+  namespace: ${TARGET_NAMESPACE}
+spec:
+  template:
+    spec:
+      users:
+      - name: konvoy
+        sshAuthorizedKeys:
+        - "${SSH_PUBLIC_KEY}" # ssh public key to log in to the worker VMs in VCD
+        sudo: ALL=(ALL) NOPASSWD:ALL
+      joinConfiguration:
+        nodeRegistration:
+          criSocket: unix:///run/containerd/containerd.sock
+          kubeletExtraArgs:
+            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+            cloud-provider: external
+      preKubeadmCommands:
+      - /run/kubeadm/konvoy-set-kube-proxy-configuration.sh
+      - /run/konvoy/containerd-apply-patches.sh
+      - systemctl daemon-reload
+      - /run/konvoy/restart-containerd-and-wait.sh
+      files:
+      - content: |
+          #!/bin/bash
+          # CAPI does not expose an API to modify KubeProxyConfiguration
+          # this is a workaround to use a script with preKubeadmCommand to modify the kubeadm config files
+          # https://github.com/kubernetes-sigs/cluster-api/issues/4512
+          for i in $(ls /run/kubeadm/ | grep 'kubeadm.yaml\|kubeadm-join-config.yaml'); do
+            cat <<EOF>> "/run/kubeadm//$i"
+          ---
+          kind: KubeProxyConfiguration
+          apiVersion: kubeproxy.config.k8s.io/v1alpha1
+          metricsBindAddress: "0.0.0.0:10249"
+          EOF
+          done
+        path: /run/kubeadm/konvoy-set-kube-proxy-configuration.sh
+        permissions: "0700"
+      - content: |
+          [metrics]
+            address = "0.0.0.0:1338"
+            grpc_histogram = false
+        path: /etc/containerd/konvoy-conf.d/konvoy-metrics.toml
+        permissions: "0644"
+      - content: |
+          #!/bin/bash
+          set -euo pipefail
+          IFS=$'\n\t'
+
+          if ! ctr --namespace k8s.io images check "name==docker.io/mesosphere/toml-merge:v0.1.0" | grep "docker.io/mesosphere/toml-merge:v0.1.0" >/dev/null; then
+            ctr --namespace k8s.io images pull "docker.io/mesosphere/toml-merge:v0.1.0"
+          fi
+
+          cleanup() {
+            ctr images unmount "$tmp_ctr_mount_dir" || true
+          }
+
+          trap 'cleanup' EXIT
+
+          readonly tmp_ctr_mount_dir="$(mktemp -d)"
+
+          ctr --namespace k8s.io images mount docker.io/mesosphere/toml-merge:v0.1.0 "$tmp_ctr_mount_dir"
+          "$tmp_ctr_mount_dir/usr/local/bin/toml-merge" -i --patch-file "/etc/containerd/konvoy-conf.d/*.toml" /etc/containerd/config.toml
+        path: /run/konvoy/containerd-apply-patches.sh
+        permissions: "0700"
+      - content: |
+          #!/bin/bash
+          systemctl restart containerd
+
+          SECONDS=0
+          until crictl info; do
+            if ((SECONDS > 60)); then
+              echo "Containerd is not running. Giving up..."
+              exit 1
+            fi
+            echo "Containerd is not running yet. Waiting..."
+            sleep 5
+          done
+        path: /run/konvoy/restart-containerd-and-wait.sh
+        permissions: "0700"
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: ${CLUSTER_NAME}-${WORKER_POOL_NAME}
+  namespace: ${TARGET_NAMESPACE}
+spec:
+  clusterName: ${CLUSTER_NAME} # name of the Cluster object
+  replicas: ${WORKER_MACHINE_COUNT} # desired number of worker nodes for the cluster
+  selector:
+    matchLabels: null
+  template:
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: ${CLUSTER_NAME}-${WORKER_POOL_NAME} # name of the KubeadmConfigTemplate object
+          namespace: ${TARGET_NAMESPACE} # kubernetes namespace of the KubeadmConfigTemplate object. Should be the same namespace as that of the Cluster object
+      clusterName: ${CLUSTER_NAME} # name of the Cluster object
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: VCDMachineTemplate
+        name: ${CLUSTER_NAME}-${WORKER_POOL_NAME} # name of the VCDMachineTemplate object used to deploy worker nodes
+        namespace: ${TARGET_NAMESPACE} # kubernetes namespace of the VCDMachineTemplate object used to deploy worker nodes
+      version: ${KUBERNETES_VERSION} # Kubernetes version to be used to create (or) upgrade the worker nodes. The value needs to be retrieved from the respective TKGm ova BOM. Refer to the documentation.
+---
+apiVersion: addons.cluster.x-k8s.io/v1alpha4
+kind: ClusterResourceSet
+metadata:
+  labels:
+    konvoy.d2iq.io/cluster-name: ${CLUSTER_NAME}
+  name: ccm-cpi-config-${CLUSTER_NAME}
+  namespace: default
+spec:
+  clusterSelector:
+    matchLabels:
+      konvoy.d2iq.io/cluster-name: ${CLUSTER_NAME}
+  resources:
+  - kind: ConfigMap
+    name: capvcd-cm-${CLUSTER_NAME}
+  - kind: Secret
+    name: capvcd-secret-${CLUSTER_NAME}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: capvcd-secret-${CLUSTER_NAME}
+type: addons.cluster.x-k8s.io/resource-set
+stringData:
+  capvcd-secret.yaml: |-
+    ---
+    apiVersion: v1
+    data:
+      clusterid: ${VCD_RDE_ID_B64}
+    kind: Secret
+    metadata:
+      name: vcloud-clusterid-secret
+      namespace: kube-system
+    ---
+    apiVersion: v1
+    data:
+      refreshToken: ${VCD_REFRESH_TOKEN_B64}
+    kind: Secret
+    metadata:
+      name: vcloud-basic-auth
+      namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: capvcd-cm-${CLUSTER_NAME}
+data:
+  capvcd-config.yaml: |-
+    ---
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: vcloud-csi-configmap
+      namespace: kube-system
+    data:
+      vcloud-csi-config.yaml: |+
+        vcd:
+          host: ${VCD_SITE}
+          org: ${VCD_ORGANIZATION}
+          vdc: ${VCD_ORGANIZATION_VDC}
+          vAppName: ${CLUSTER_NAME}
+        clusterid: ${VCD_RDE_ID}
+    immutable: true
+    ---
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: vcloud-ccm-configmap
+      namespace: kube-system
+    data:
+      vcloud-ccm-config.yaml: |+
+        vcd:
+          host: ${VCD_SITE}
+          org: ${VCD_ORGANIZATION}
+          vdc: ${VCD_ORGANIZATION_VDC}
+        clusterid: ${VCD_RDE_ID}
+        vAppName: ${VAPP}
+        loadbalancer:
+          network: ${VCD_ORGANIZATION_VDC_NETWORK}
+          enableVirtualServiceSharedIP: true
+          oneArm:
+            startIP: "10.20.0.8"
+            endIP: "10.20.0.9"
+          ports:
+            http: 80
+            https: 443
+    immutable: true
+    ---
+    kind: StorageClass
+    apiVersion: storage.k8s.io/v1
+    metadata:
+      annotations:
+        storageclass.kubernetes.io/is-default-class: "true"
+      name: vcd-disk-dev
+    provisioner: named-disk.csi.cloud-director.vmware.com
+    reclaimPolicy: Delete
+    parameters:
+      storageProfile: ${VCD_PV_STORAGE_PROFILE}
+      filesystem: "ext4"
+---
+apiVersion: addons.cluster.x-k8s.io/v1beta1
+kind: ClusterResourceSet
+metadata:
+  labels:
+    konvoy.d2iq.io/cluster-name: ${CLUSTER_NAME}
+  name: kube-vip-cc-installation-${CLUSTER_NAME}
+  namespace: default
+spec:
+  clusterSelector:
+    matchLabels:
+      konvoy.d2iq.io/cluster-name: ${CLUSTER_NAME}
+  resources:
+  - kind: ConfigMap
+    name: kube-vip-cc-config-${CLUSTER_NAME}
+  strategy: ApplyAlways
+---
+apiVersion: v1
+data:
+  custom-resources.yaml: |
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: kube-vip-cloud-controller
+      namespace: kube-system
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      annotations:
+        rbac.authorization.kubernetes.io/autoupdate: "true"
+      name: system:kube-vip-cloud-controller-role
+    rules:
+      - apiGroups: ["coordination.k8s.io"]
+        resources: ["leases"]
+        verbs: ["get", "create", "update", "list", "put"]
+      - apiGroups: [""]
+        resources: ["configmaps", "endpoints","events","services/status", "leases"]
+        verbs: ["*"]
+      - apiGroups: [""]
+        resources: ["nodes", "services"]
+        verbs: ["list","get","watch","update"]
+    ---
+    kind: ClusterRoleBinding
+    apiVersion: rbac.authorization.k8s.io/v1
+    metadata:
+      name: system:kube-vip-cloud-controller-binding
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: system:kube-vip-cloud-controller-role
+    subjects:
+    - kind: ServiceAccount
+      name: kube-vip-cloud-controller
+      namespace: kube-system
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: kube-vip-cloud-provider
+      namespace: kube-system
+    spec:
+      replicas: 1
+      revisionHistoryLimit: 10
+      selector:
+        matchLabels:
+          app: kube-vip
+          component: kube-vip-cloud-provider
+      strategy:
+        rollingUpdate:
+          maxSurge: 25%
+          maxUnavailable: 25%
+        type: RollingUpdate
+      template:
+        metadata:
+          labels:
+            app: kube-vip
+            component: kube-vip-cloud-provider
+        spec:
+          containers:
+          - command:
+            - /kube-vip-cloud-provider
+            - --leader-elect-resource-name=kube-vip-cloud-controller
+            image: ghcr.io/kube-vip/kube-vip-cloud-provider:v0.0.4
+            name: kube-vip-cloud-provider
+            imagePullPolicy: Always
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          terminationGracePeriodSeconds: 30
+          serviceAccountName: kube-vip-cloud-controller
+          tolerations:
+          - key: node-role.kubernetes.io/master
+            effect: NoSchedule
+          - key: node-role.kubernetes.io/control-plane
+            effect: NoSchedule
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 10
+                preference:
+                  matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+              - weight: 10
+                preference:
+                  matchExpressions:
+                  - key: node-role.kubernetes.io/master
+                    operator: Exists
+    ---
+    apiVersion: v1
+    data:
+      range-global: ${K8S_SERVICE_LB_RANGE}
+    kind: ConfigMap
+    metadata:
+      creationTimestamp: null
+      name: kubevip
+      namespace: kube-system
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: kube-vip-cc-config-${CLUSTER_NAME}
