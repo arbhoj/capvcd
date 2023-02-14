@@ -15,8 +15,7 @@ export VCD_TEMPLATE_NAME="dkp-2.4.0-airgapped-ubuntu-k8s-v1.24.6"
 
 export SSH_PUBLIC_KEY=$(cat /home/builder/dkp/demo/ssh.pub)
 
-export VCD_RDE_ID=NO_RDE_${VCD_ORGANIZATION_VDC}-${CLUSTER_NAME} # Auto set by the generate_rde_and_set_vars.sh script
-export VCD_RDE_ID_B64=$(echo $VCD_RDE_ID | { base64 -w0 2>/dev/null || base64; })
+export VCD_RDE_ID=NO_RDE_${VCD_ORGANIZATION_VDC}-${CLUSTER_NAME}
 
 export TARGET_NAMESPACE=default
 

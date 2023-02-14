@@ -600,8 +600,8 @@ stringData:
   capvcd-secret.yaml: |-
     ---
     apiVersion: v1
-    data:
-      clusterid: ${VCD_RDE_ID_B64}
+    stringData:
+      clusterid: ${VCD_RDE_ID}
     kind: Secret
     metadata:
       name: vcloud-clusterid-secret
