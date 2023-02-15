@@ -97,14 +97,11 @@ clusterctl generate cluster -i vcd:v1.0.0 ${CLUSTER_NAME} > ${CLUSTER_NAME}.yaml
 ```
 
 Review the generated manifest and make changes if requered
-```
-# vi ${CLUSTER_NAME}.yaml
 ```bash
+# vi ${CLUSTER_NAME}.yaml
 Apply the manifests to the Management cluster to kick off a cluster build
 ```
 kubectl apply -f ${CLUSTER_NAME}.yaml
-
-```bash
 
 Watch the progress
 ```bash
@@ -136,7 +133,7 @@ Now follow these steps to rollout the upgrade itself:
 > Ensure that kubectl is pointing to the Management CAPI cluster for the cluster being upgraded
 
 Begin by declaring some environment variables
-```
+```bash
 export CLUSTER_NAME=<CLUSTER-NAME>
 export CLUSTER_NAMESPACE=default
 export WORKER_POOL_NAME=wp1
@@ -146,7 +143,7 @@ export KUBERNETES_VERSION=v1.25.6
 
 Create New InfrastructureMachineTemplate for Control Plane
 
-```
+```bash
 kubectl apply -f - <<EOF 
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: VCDMachineTemplate
@@ -166,7 +163,7 @@ EOF
 ```
 
 Create New InfrastructureMachineTemplate for Worker Nodes
-```
+```bash
 kubectl apply -f - <<EOF 
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: VCDMachineTemplate
@@ -186,7 +183,7 @@ EOF
 ```
 
 Now to trigger control plane upgrade patch the kcp resource to point to the update control plane machine template
-```
+```bash
 # Update machineTemplate in KubeadmControlPlane with the new control plane template and also update the kubernetes version
 
 cat <<EOF | kubectl patch -n ${CLUSTER_NAMESPACE} --type='merge' kcp ${CLUSTER_NAME}-control-plane --patch-file /dev/stdin
@@ -204,7 +201,7 @@ EOF
 The above will perform a rolling upgrade on the control plane
 
 # Finally trigger worker nodes upgrade by patching the md resource for the worker pool
-```
+```bash
 cat <<EOF | kubectl patch -n ${CLUSTER_NAMESPACE} --type='merge' md ${CLUSTER_NAME}-${WORKER_POOL_NAME} --patch-file /dev/stdin
 ---
 spec:
@@ -222,7 +219,7 @@ EOF
 The above will perform a rolling upgrade on the worker nodes
 
 Verify by pointing kubectl to the cluster that was just upgraded and running the following command 
-```
+```bash
 kubectl get no -o wide
 ```
 
@@ -231,6 +228,6 @@ kubectl get no -o wide
 
 To delete the cluster just provisioned simply use the following DKP cli
 
-```
+```bash
 dkp delete cluster -c ${CLUSTER_NAME} --delete-kubernetes-resources=false
 ```
