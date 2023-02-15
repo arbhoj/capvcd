@@ -122,7 +122,7 @@ kubectl  --kubeconfig=${WORKLOAD_KUBECONFIG} get pods -A
 
 ```
 
-## Upgrade
+## Part 3: Upgrade
 In order to upgrade the VCDMachineTemplates need to be switched. This is done by creating new VCDMachineTemplates and then switching the references for the same in kcp (KubeadmControlPlane) and md (MachineDeployment) resources for upgrading control plane and worker nodes respectively.
 
 As a pre-req, update the VM template for the new kubernetes version and create a new vApp in vCD using this new template. This can be done by cloning the existing template and then upgrading the following components in it:
