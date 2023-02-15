@@ -122,6 +122,111 @@ kubectl  --kubeconfig=${WORKLOAD_KUBECONFIG} get pods -A
 
 ```
 
+## Upgrade
+In order to upgrade the VCDMachineTemplates need to be switched. This is done by creating new VCDMachineTemplates and then switching the references for the same in kcp (KubeadmControlPlane) and md (MachineDeployment) resources for upgrading control plane and worker nodes respectively.
+
+As a pre-req, update the VM template for the new kubernetes version and create a new vApp in vCD using this new template. This can be done by cloning the existing template and then upgrading the following components in it:
+- kubeadm
+- kubectl
+- kubelet
+- containerd
+
+Now follow these steps to rollout the upgrade itself:
+
+> Ensure that kubectl is pointing to the Management CAPI cluster for the cluster being upgraded
+
+Begin by declaring some environment variables
+```
+export CLUSTER_NAME=<CLUSTER-NAME>
+export CLUSTER_NAMESPACE=default
+export WORKER_POOL_NAME=wp1
+export NEW_IMAGE=<NEW_vAPP_Name>
+export KUBERNETES_VERSION=v1.25.6
+```
+
+Create New InfrastructureMachineTemplate for Control Plane
+
+```
+kubectl apply -f - <<EOF 
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: VCDMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-cp-${KUBERNETES_VERSION}
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  template:
+    spec:
+      catalog: dkp
+      enableNvidiaGPU: false
+      placementPolicy: null
+      sizingPolicy: dkp_control_standard
+      storageProfile: vSAN Default Storage Policy
+      template: ${NEW_vAPP}
+EOF
+```
+
+Create New InfrastructureMachineTemplate for Worker Nodes
+```
+kubectl apply -f - <<EOF 
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: VCDMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-${WORKER_POOL_NAME}-${KUBERNETES_VERSION}
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  template:
+    spec:
+      catalog: dkp
+      enableNvidiaGPU: false
+      placementPolicy: null
+      sizingPolicy: dkp_worker_standard
+      storageProfile: vSAN Default Storage Policy
+      template: ${NEW_vAPP}
+EOF
+```
+
+Now to trigger control plane upgrade patch the kcp resource to point to the update control plane machine template
+```
+# Update machineTemplate in KubeadmControlPlane with the new control plane template and also update the kubernetes version
+
+cat <<EOF | kubectl patch -n ${CLUSTER_NAMESPACE} --type='merge' kcp ${CLUSTER_NAME}-control-plane --patch-file /dev/stdin
+---
+spec:
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: VCDMachineTemplate
+      name: ${CLUSTER_NAME}-cp-${KUBERNETES_VERSION}
+      namespace: ${CLUSTER_NAMESPACE}
+  version: v1.25.6
+EOF
+```
+The above will perform a rolling upgrade on the control plane
+
+# Finally trigger worker nodes upgrade by patching the md resource for the worker pool
+```
+cat <<EOF | kubectl patch -n ${CLUSTER_NAMESPACE} --type='merge' md ${CLUSTER_NAME}-${WORKER_POOL_NAME} --patch-file /dev/stdin
+---
+spec:
+  template:
+    spec:
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: VCDMachineTemplate
+        name: ${CLUSTER_NAME}-${WORKER_POOL_NAME}-${KUBERNETES_VERSION}
+        namespace: ${CLUSTER_NAMESPACE}
+      version: v1.25.6
+EOF
+
+```
+The above will perform a rolling upgrade on the worker nodes
+
+Verify by pointing kubectl to the cluster that was just upgraded and running the following command 
+```
+kubectl get no -o wide
+```
+
+
 ## Cleanup
 
 To delete the cluster just provisioned simply use the following DKP cli
