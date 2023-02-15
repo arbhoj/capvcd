@@ -34,7 +34,7 @@ export VCD_CONTROL_PLANE_SIZING_POLICY="dkp_control_standard"
 export VCD_CONTROL_PLANE_STORAGE_PROFILE="vSAN Default Storage Policy"
 
 export WORKER_MACHINE_COUNT=4
-export WORKER_POOL_NAME="worker-pool-1"
+export WORKER_POOL_NAME="wp1"
 export VCD_WORKER_SIZING_POLICY="dkp_worker_standard"
 export VCD_WORKER_STORAGE_PROFILE="vSAN Default Storage Policy"
 
