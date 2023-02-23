@@ -36,7 +36,7 @@ Then copy artifacts from the cloned repository to specific locations on the serv
 ```bash
 mkdir -p ~/infrastructure-vcd/v1.0.0/
 cp -r infrastructure-vcd/v1.0.0 ~/infrastructure-vcd/.
-
+mkdir ~/.cluster-api
 cp infrastructure-vcd/clusterctl.yaml ~/.cluster-api/clusterctl.yaml
 ```
 
