@@ -172,7 +172,7 @@ data:
             fsGroup: 2000
           containers:
             - name: vmware-cloud-director-ccm
-              image: arvindbhoj/cloud-provider-for-cloud-director:1.2.0-3
+              image: arvindbhoj/cloud-provider-for-cloud-director:1.2.0-4
               imagePullPolicy: IfNotPresent
               command:
                 - /opt/vcloud/bin/cloud-provider-for-cloud-director
