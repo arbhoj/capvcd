@@ -38,7 +38,9 @@ metadata:
     clusterctl.cluster.x-k8s.io/move: ""
 type: Opaque
 data:
-  refreshToken: ${VCD_REFRESH_TOKEN_B64} # refresh token of the client registered with VCD for creating clusters. username and password can be left blank if refresh token is provided
+  refreshToken: "${VCD_REFRESH_TOKEN_B64}" # refresh token of the client registered with VCD for creating clusters. username and password can be left blank if refresh token is provided
+  username: ${VCD_USERNAME_B64}
+  password: ${VCD_PASSWORD_B64}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: VCDCluster
@@ -610,6 +612,8 @@ stringData:
     apiVersion: v1
     data:
       refreshToken: ${VCD_REFRESH_TOKEN_B64}
+      username: ${VCD_USERNAME_B64}
+      password: ${VCD_PASSWORD_B64}      
     kind: Secret
     metadata:
       name: vcloud-basic-auth
