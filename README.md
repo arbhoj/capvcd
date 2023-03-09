@@ -156,7 +156,7 @@ spec:
       placementPolicy: null
       sizingPolicy: dkp_control_standard
       storageProfile: vSAN Default Storage Policy
-      template: ${NEW_vAPP}
+      template: ${NEW_IMAGE}
 EOF
 ```
 
@@ -176,7 +176,7 @@ spec:
       placementPolicy: null
       sizingPolicy: dkp_worker_standard
       storageProfile: vSAN Default Storage Policy
-      template: ${NEW_vAPP}
+      template: ${NEW_IMAGE}
 EOF
 ```
 
