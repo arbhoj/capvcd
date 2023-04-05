@@ -190,6 +190,8 @@ data:
                     secretKeyRef:
                       name: vcloud-clusterid-secret
                       key: clusterid
+                - name: CAPVCD_SKIP_LB
+                  value: "true"
           tolerations:
             - key: node-role.kubernetes.io/master
               effect: NoSchedule
